@@ -40,10 +40,21 @@ def get_language_instruction() -> str:
     report rather than a mix of languages.
     """
     from tradingagents.dataflows.config import get_config
-    lang = get_config().get("output_language", "English")
-    if lang.strip().lower() == "english":
-        return ""
-    return f" Write your entire response in {lang}."
+    config = get_config()
+    
+    instructions = []
+    
+    lang = config.get("output_language", "English")
+    if lang.strip().lower() != "english":
+        instructions.append(f"Write your entire response in {lang}.")
+        
+    report_length = config.get("report_length", "Full")
+    if "Concise" in report_length:
+        instructions.append("Keep your response brief and concise, focusing only on the most critical points. Do not write a long essay.")
+        
+    if instructions:
+        return " " + " ".join(instructions)
+    return ""
 
 
 def _clean_identity_value(value: Any) -> Optional[str]:
@@ -155,12 +166,20 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     consumer is never forced to make a yfinance call mid-graph.
     """
     context = state.get("instrument_context")
-    if isinstance(context, str) and context.strip():
-        return context
-    return build_instrument_context(
-        str(state["company_of_interest"]),
-        state.get("asset_type", "stock"),
+    if not (isinstance(context, str) and context.strip()):
+        context = build_instrument_context(
+            str(state["company_of_interest"]),
+            state.get("asset_type", "stock"),
+        )
+    
+    trading_mode = state.get("trading_mode", "Spot")
+    timeframe = state.get("timeframe", "Medium-term")
+    context += (
+        f" The user has selected the {timeframe} timeframe and {trading_mode} trading mode. "
+        f"Your analysis must align with this timeframe. If Futures mode is selected, "
+        f"you may recommend Short Selling if the outlook is bearish."
     )
+    return context
 
 
 def create_msg_delete():

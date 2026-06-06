@@ -100,7 +100,7 @@ class BuildInstrumentContextTests(unittest.TestCase):
 class GetInstrumentContextFromStateTests(unittest.TestCase):
     def test_prefers_precomputed_context(self):
         state = {"company_of_interest": "TOTDY", "instrument_context": "PRECOMPUTED"}
-        self.assertEqual(get_instrument_context_from_state(state), "PRECOMPUTED")
+        self.assertTrue(get_instrument_context_from_state(state).startswith("PRECOMPUTED"))
 
     def test_fallback_is_network_free_ticker_only(self):
         # No instrument_context and no yfinance call — must not hit the network.

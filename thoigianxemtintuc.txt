@@ -1,0 +1,25 @@
+Dưới đây là lịch trình tối ưu và ngắn gọn nhất để cắm AI quét dữ liệu đánh Futures (Khung D1, giữ 1-2 tuần):
+
+1. HÀNG TUẦN (Bắt xu hướng chính)
+
+Thời điểm Vàng: 7:00 - 8:00 Sáng Thứ Hai (Giờ VN).
+
+Lý do: Nến Tuần (Weekly) vừa đóng, AI tổng hợp được toàn bộ diễn biến tuần cũ và tin tức cuối tuần để vẽ đường cho cả tuần mới.
+
+2. HÀNG NGÀY (Tìm điểm vào lệnh đẹp)
+
+Thời điểm Vàng: 7:00 - 8:00 Sáng mỗi ngày.
+
+Lý do: Nến Ngày (D1) vừa đóng, biểu đồ đã rõ ràng, không bị nhiễu bởi các cú giật râu nến (whipsaw) của phiên Mỹ đêm hôm trước.
+
+3. HÀNG THÁNG (Đọc Vĩ mô - Bắt sóng lớn)
+Nguyên tắc: KHÔNG chạy AI ngay lúc tin đang ra. Hãy cho AI chạy vào SÁNG HÔM SAU để đánh giá dòng tiền chuẩn xác nhất.
+
+Tin Non-Farm (Bảng lương Mỹ): Chạy bot vào Sáng Thứ Bảy (tuần đầu tiên của tháng).
+
+Tin CPI (Lạm phát): Chạy bot vào Sáng hôm sau ngày ra tin (thường quanh ngày 10-15 hàng tháng).
+
+Lãi suất FED (FOMC): Chạy bot vào Sáng Thứ Năm (ngay sau đêm rạng sáng FED họp).
+
+💡 Chốt lại công thức:
+Hãy tạo thói quen mở máy cho bot chạy phân tích vào khoảng 7h15 Sáng (Giờ VN). Quan trọng nhất là sáng Thứ Hai và các buổi sáng sau ngày có tin vĩ mô lớn.

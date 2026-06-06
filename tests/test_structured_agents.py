@@ -24,6 +24,9 @@ from tradingagents.agents.schemas import (
     render_research_plan,
     render_sentiment_report,
     render_trader_proposal,
+    FuturesAction,
+    FuturesTraderProposal,
+    render_futures_proposal,
 )
 from tradingagents.agents.trader.trader import create_trader
 
@@ -66,6 +69,64 @@ class TestRenderTraderProposal:
         assert "Stop Loss" not in md
         assert "Position Sizing" not in md
         assert "FINAL TRANSACTION PROPOSAL: **SELL**" in md
+
+
+@pytest.mark.unit
+class TestRenderFuturesProposal:
+    def test_futures_rendering_english(self, monkeypatch):
+        # Mock config to return English
+        from tradingagents.dataflows.config import get_config
+        monkeypatch.setattr("tradingagents.dataflows.config.get_config", lambda: {"output_language": "English"})
+
+        p = FuturesTraderProposal(
+            action=FuturesAction.LONG,
+            market_context="Strong bullish momentum above EMA200.",
+            entry_market="65200",
+            entry_limit="64500",
+            entry_stop="66100",
+            entry_dca="From 64000 to 64500 (30% at A, 70% at B)",
+            tp1="67500",
+            tp2="69000",
+            tp3="trailing stop 2%",
+            hard_sl="63000"
+        )
+        md = render_futures_proposal(p)
+        assert "[FUTURES ORDER EXECUTION STRATEGY]" in md
+        assert "1. TRANSACTION DIRECTION: LONG" in md
+        assert "2. MARKET CONTEXT: Strong bullish momentum" in md
+        assert "Lựa chọn 1" not in md
+        assert "FINAL TRANSACTION PROPOSAL: **LONG**" in md
+
+    def test_futures_rendering_vietnamese(self, monkeypatch):
+        # Mock config to return Vietnamese
+        from tradingagents.dataflows.config import get_config
+        monkeypatch.setattr("tradingagents.dataflows.config.get_config", lambda: {"output_language": "Vietnamese"})
+
+        p = FuturesTraderProposal(
+            action=FuturesAction.SHORT,
+            market_context="Xu hướng giảm rõ rệt.",
+            entry_market="65200",
+            entry_limit="65500",
+            entry_stop="64900",
+            entry_dca="Từ 65000 đến 65500. (30% tại 65500, 70% tại 65000)",
+            tp1="64000",
+            tp2="63000",
+            tp3="trailing stop 3%",
+            hard_sl="66200"
+        )
+        md = render_futures_proposal(p)
+        assert "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]" in md
+        assert "1. HƯỚNG GIAO DỊCH: SHORT" in md
+        assert "2. BỐI CẢNH THỊ TRƯỜNG: Xu hướng giảm rõ rệt." in md
+        assert "   - Lựa chọn 1 - Vào lệnh ngay lập tức (Lệnh Market / Thị trường): 65200. Chỉ dùng lệnh này nếu" in md
+        assert "   - Lựa chọn 2 - Lệnh An toàn nhất (Lệnh Limit / Chờ giới hạn): 65500" in md
+        assert "   - Lựa chọn 3 - Lệnh Đánh Breakout (Lệnh Stop-Market / Dừng thị trường): 64900" in md
+        assert "   - Lựa chọn 4 - Vùng Gom Lệnh DCA (Dải Lệnh Limit): Từ 65000 đến 65500. (30% tại 65500, 70% tại 65000)" in md
+        assert "   - TP1 (Lệnh Limit): 64000 - Khuyên chốt 50% vị thế." in md
+        assert "   - TP2 (Lệnh Limit): 63000 - Khuyên chốt 30% vị thế." in md
+        assert "   - TP3 (Lệnh Trailing Stop / Dừng theo dõi): trailing stop 3% - Gợi ý mức để thả trôi 20% vị thế còn lại gồng lời." in md
+        assert "   - Lệnh Hard SL (Stop-Market): 66200 - Lệnh kích hoạt thị trường bắt buộc để chống cháy tài khoản." in md
+        assert "FINAL TRANSACTION PROPOSAL: **SHORT**" in md
 
 
 @pytest.mark.unit
@@ -163,6 +224,78 @@ class TestTraderAgent:
         trader = create_trader(llm)
         result = trader(_make_trader_state())
         assert result["trader_investment_plan"] == plain_response
+
+    def test_futures_mode_produces_vietnamese_report(self, monkeypatch):
+        from tradingagents.dataflows.config import get_config
+        monkeypatch.setattr("tradingagents.dataflows.config.get_config", lambda: {"output_language": "Vietnamese"})
+
+        captured = {}
+        proposal = FuturesTraderProposal(
+            action=FuturesAction.LONG,
+            market_context="Tăng mạnh.",
+            entry_market="65200",
+            entry_limit="64500",
+            entry_stop="66100",
+            entry_dca="Từ 64000 đến 64500. (30% tại 64500, 70% tại 64000)",
+            tp1="67500",
+            tp2="69000",
+            tp3="trailing stop 2%",
+            hard_sl="63000"
+        )
+
+        structured = MagicMock()
+        structured.invoke.side_effect = lambda prompt: (
+            captured.__setitem__("prompt", prompt) or proposal
+        )
+        llm = MagicMock()
+        llm.with_structured_output.return_value = structured
+
+        trader = create_trader(llm)
+        state = _make_trader_state()
+        state["trading_mode"] = "Futures (Long/Short)"
+
+        result = trader(state)
+        plan = result["trader_investment_plan"]
+        assert "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]" in plan
+        assert "1. HƯỚNG GIAO DỊCH: LONG" in plan
+        assert "Lựa chọn 1 - Vào lệnh ngay lập tức" in plan
+        assert "FINAL TRANSACTION PROPOSAL: **LONG**" in plan
+
+    def test_futures_mode_includes_past_context(self, monkeypatch):
+        from tradingagents.dataflows.config import get_config
+        monkeypatch.setattr("tradingagents.dataflows.config.get_config", lambda: {"output_language": "English"})
+
+        captured = {}
+        proposal = FuturesTraderProposal(
+            action=FuturesAction.LONG,
+            market_context="Strong.",
+            entry_market="65200",
+            entry_limit="64500",
+            entry_stop="66100",
+            entry_dca="DCA range",
+            tp1="67500",
+            tp2="69000",
+            tp3="trailing stop 2%",
+            hard_sl="63000"
+        )
+
+        structured = MagicMock()
+        structured.invoke.side_effect = lambda prompt: (
+            captured.__setitem__("prompt", prompt) or proposal
+        )
+        llm = MagicMock()
+        llm.with_structured_output.return_value = structured
+
+        trader = create_trader(llm)
+        state = _make_trader_state()
+        state["trading_mode"] = "Futures (Long/Short)"
+        state["past_context"] = "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]\n1. HƯỚNG GIAO DỊCH: SHORT\n..."
+
+        trader(state)
+        prompt = captured["prompt"]
+        user_message = next(m["content"] for m in prompt if m["role"] == "user")
+        assert "Below is the past decision/strategy history" in user_message
+        assert "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]" in user_message
 
 
 # ---------------------------------------------------------------------------

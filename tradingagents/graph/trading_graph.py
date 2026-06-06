@@ -366,6 +366,8 @@ class TradingAgentsGraph:
             asset_type=asset_type,
             past_context=past_context,
             instrument_context=instrument_context,
+            trading_mode=self.config.get("trading_mode", "Spot"),
+            timeframe=self.config.get("timeframe", "Medium-term"),
         )
         args = self.propagator.get_graph_args()
 

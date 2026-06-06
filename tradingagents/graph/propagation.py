@@ -22,6 +22,8 @@ class Propagator:
         asset_type: str = "stock",
         past_context: str = "",
         instrument_context: str = "",
+        trading_mode: str = "Spot",
+        timeframe: str = "Medium-term",
     ) -> Dict[str, Any]:
         """Create the initial state for the agent graph.
 
@@ -37,6 +39,8 @@ class Propagator:
             "asset_type": asset_type,
             "instrument_context": instrument_context,
             "trade_date": str(trade_date),
+            "trading_mode": trading_mode,
+            "timeframe": timeframe,
             "past_context": past_context,
             "investment_debate_state": InvestDebateState(
                 {

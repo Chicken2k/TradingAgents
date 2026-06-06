@@ -51,6 +51,8 @@ class TraderAction(str, Enum):
     BUY = "Buy"
     HOLD = "Hold"
     SELL = "Sell"
+    SHORT = "Short"
+    COVER = "Cover"
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +118,7 @@ class TraderProposal(BaseModel):
     """
 
     action: TraderAction = Field(
-        description="The transaction direction. Exactly one of Buy / Hold / Sell.",
+        description="The transaction direction. Exactly one of Buy / Hold / Sell / Short / Cover.",
     )
     reasoning: str = Field(
         description=(
@@ -131,6 +133,10 @@ class TraderProposal(BaseModel):
     stop_loss: Optional[float] = Field(
         default=None,
         description="Optional stop-loss price in the instrument's quote currency.",
+    )
+    take_profit: Optional[float] = Field(
+        default=None,
+        description="Optional take-profit target price in the instrument's quote currency.",
     )
     position_sizing: Optional[str] = Field(
         default=None,
@@ -154,6 +160,8 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         parts.extend(["", f"**Entry Price**: {proposal.entry_price}"])
     if proposal.stop_loss is not None:
         parts.extend(["", f"**Stop Loss**: {proposal.stop_loss}"])
+    if getattr(proposal, "take_profit", None) is not None:
+        parts.extend(["", f"**Take Profit**: {proposal.take_profit}"])
     if proposal.position_sizing:
         parts.extend(["", f"**Position Sizing**: {proposal.position_sizing}"])
     parts.extend([
@@ -161,6 +169,109 @@ def render_trader_proposal(proposal: TraderProposal) -> str:
         f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value.upper()}**",
     ])
     return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Futures Trader
+# ---------------------------------------------------------------------------
+
+
+class FuturesAction(str, Enum):
+    """Transaction direction used by the Trader for Futures."""
+
+    LONG = "LONG"
+    SHORT = "SHORT"
+    HOLD = "HOLD"
+
+
+class FuturesTraderProposal(BaseModel):
+    """Structured transaction proposal for Futures trading produced by the Trader."""
+
+    action: FuturesAction = Field(
+        description="The futures transaction direction. Exactly one of LONG / SHORT / HOLD.",
+    )
+    market_context: str = Field(
+        description="A 1-2 sentence summary of the current market momentum in the requested language.",
+    )
+    entry_market: str = Field(
+        description="Immediate entry price (Market order). E.g., '65200' or 'N/A'. Do not include the explanation text about market momentum/chờ đợi.",
+    )
+    entry_limit: str = Field(
+        description="Safest entry price (Limit order) target. E.g., '64500' or 'N/A'. Do not include the explanation text about bắt râu nến/đợi giá hồi.",
+    )
+    entry_stop: str = Field(
+        description="Breakout entry price (Stop-Market order) target. E.g., '66100' or 'N/A'. Do not include the explanation text about phá vỡ hỗ trợ/kháng cự.",
+    )
+    entry_dca: str = Field(
+        description="DCA zone and split recommendation, e.g. 'Từ 64000 đến 64500. (30% tại 64500, 70% tại 64000)'. Match format: 'Từ [Giá A] đến [Giá B]. (Đề xuất chia % vốn, VD: 30% tại A, 70% tại B)'.",
+    )
+    tp1: str = Field(
+        description="TP1 price target (Limit order). E.g., '67500'. Do not include the chốt 50% vị thế text.",
+    )
+    tp2: str = Field(
+        description="TP2 price target (Limit order). E.g., '69000'. Do not include the chốt 30% vị thế text.",
+    )
+    tp3: str = Field(
+        description="TP3 Trailing Stop level (suggest price or percentage). E.g., 'trailing stop 2%' or '72000'. Do not include the thả trôi 20% text.",
+    )
+    hard_sl: str = Field(
+        description="Mandatory stop loss target(s) (Stop-Market / other stop loss options). You may specify a hard stop loss price and optionally other stop loss options (e.g., alert/soft stop loss) if appropriate. E.g., '63000' or 'Hard SL 63000, Soft SL 63800'. Do not include the chống cháy tài khoản text.",
+    )
+
+
+def render_futures_proposal(proposal: FuturesTraderProposal) -> str:
+    """Render a FuturesTraderProposal to markdown, localizing based on configured output language."""
+    from tradingagents.dataflows.config import get_config
+    config = get_config()
+    lang = config.get("output_language", "English")
+
+    is_vi = "vietnamese" in lang.lower() or "tiếng việt" in lang.lower()
+
+    if is_vi:
+        parts = [
+            "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]",
+            "",
+            f"1. HƯỚNG GIAO DỊCH: {proposal.action.value}",
+            f"2. BỐI CẢNH THỊ TRƯỜNG: {proposal.market_context}",
+            "3. CÁC LOẠI LỆNH VÀ ĐIỂM VÀO ĐỀ XUẤT:",
+            f"   - Lựa chọn 1 - Vào lệnh ngay lập tức (Lệnh Market / Thị trường): {proposal.entry_market}. Chỉ dùng lệnh này nếu đà giá đang cực kỳ mạnh và việc chờ đợi sẽ làm lỡ mất cơ hội.",
+            f"   - Lựa chọn 2 - Lệnh An toàn nhất (Lệnh Limit / Chờ giới hạn): {proposal.entry_limit}. Dùng lệnh này để bắt râu nến/đợi giá hồi về điểm đẹp.",
+            f"   - Lựa chọn 3 - Lệnh Đánh Breakout (Lệnh Stop-Market / Dừng thị trường): {proposal.entry_stop}. Cài lệnh này nếu giá phá vỡ hỗ trợ/kháng cự quan trọng.",
+            f"   - Lựa chọn 4 - Vùng Gom Lệnh DCA (Dải Lệnh Limit): {proposal.entry_dca}.",
+            "4. CHIẾN LƯỢC CHỐT LỜI (CÁC LOẠI LỆNH EXIT):",
+            f"   - TP1 (Lệnh Limit): {proposal.tp1} - Khuyên chốt 50% vị thế.",
+            f"   - TP2 (Lệnh Limit): {proposal.tp2} - Khuyên chốt 30% vị thế.",
+            f"   - TP3 (Lệnh Trailing Stop / Dừng theo dõi): {proposal.tp3} - Gợi ý mức để thả trôi 20% vị thế còn lại gồng lời.",
+            "5. CẮT LỖ BẮT BUỘC (STOP LOSS):",
+            f"   - Lệnh Hard SL (Stop-Market): {proposal.hard_sl} - Lệnh kích hoạt thị trường bắt buộc để chống cháy tài khoản.",
+        ]
+    else:
+        # English template
+        parts = [
+            "[FUTURES ORDER EXECUTION STRATEGY]",
+            "",
+            f"1. TRANSACTION DIRECTION: {proposal.action.value}",
+            f"2. MARKET CONTEXT: {proposal.market_context}",
+            "3. ORDER TYPES AND PROPOSED ENTRY POINTS:",
+            f"   - Option 1 - Immediate Entry (Market Order): {proposal.entry_market}. Only use this order if momentum is extremely strong and waiting will result in a missed opportunity.",
+            f"   - Option 2 - Safest Entry (Limit Order): {proposal.entry_limit}. Use this order to catch price wicks or wait for price to pull back to a favorable point.",
+            f"   - Option 3 - Breakout Entry (Stop-Market Order): {proposal.entry_stop}. Set this order if price breaks through key support/resistance.",
+            f"   - Option 4 - DCA Accumulation Zone (Limit Order Range): {proposal.entry_dca}.",
+            "4. TAKE PROFIT STRATEGY (EXIT ORDER TYPES):",
+            f"   - TP1 (Limit Order): {proposal.tp1} - Recommend closing 50% of the position.",
+            f"   - TP2 (Limit Order): {proposal.tp2} - Recommend closing 30% of the position.",
+            f"   - TP3 (Trailing Stop / Follow-up Stop): {proposal.tp3} - Suggest level to let the remaining 20% of the position run to maximize profit.",
+            "5. MANDATORY STOP LOSS:",
+            f"   - Hard SL Order (Stop-Market): {proposal.hard_sl} - Mandatory market trigger to prevent liquidation.",
+        ]
+
+    parts.extend([
+        "",
+        f"FINAL TRANSACTION PROPOSAL: **{proposal.action.value}**",
+    ])
+    return "\n".join(parts)
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +311,10 @@ class PortfolioDecision(BaseModel):
         default=None,
         description="Optional target price in the instrument's quote currency.",
     )
+    take_profit: Optional[float] = Field(
+        default=None,
+        description="Optional take-profit price in the instrument's quote currency.",
+    )
     time_horizon: Optional[str] = Field(
         default=None,
         description="Optional recommended holding period, e.g. '3-6 months'.",
@@ -223,6 +338,8 @@ def render_pm_decision(decision: PortfolioDecision) -> str:
     ]
     if decision.price_target is not None:
         parts.extend(["", f"**Price Target**: {decision.price_target}"])
+    if getattr(decision, "take_profit", None) is not None:
+        parts.extend(["", f"**Take Profit**: {decision.take_profit}"])
     if decision.time_horizon:
         parts.extend(["", f"**Time Horizon**: {decision.time_horizon}"])
     return "\n".join(parts)
