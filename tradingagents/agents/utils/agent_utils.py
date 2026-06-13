@@ -156,6 +156,106 @@ def build_instrument_context(
     return context
 
 
+def build_initial_user_message(
+    company_name: str,
+    trade_date: str,
+    trading_mode: str,
+    timeframe: str,
+) -> str:
+    """Seed the graph with explicit trading preferences the LLM cannot ignore."""
+    return (
+        f"Analyze {company_name} as of {trade_date}. "
+        f"Required trading mode: {trading_mode}. "
+        f"Required analysis timeframe: {timeframe}. "
+        "Every report header and trade idea must use this exact mode and timeframe. "
+        "If any default instruction conflicts with this trading mode or timeframe, "
+        "ignore the default and follow the user-selected values."
+    )
+
+
+def get_trading_mode_from_state(state: Mapping[str, Any]) -> str:
+    """Read trading mode from graph state, falling back to runtime config."""
+    mode = state.get("trading_mode")
+    if isinstance(mode, str) and mode.strip():
+        return mode.strip()
+    from tradingagents.dataflows.config import get_config
+
+    return str(get_config().get("trading_mode", "Spot (Long Only)"))
+
+
+def get_timeframe_from_state(state: Mapping[str, Any]) -> str:
+    """Read timeframe from graph state, falling back to runtime config."""
+    timeframe = state.get("timeframe")
+    if isinstance(timeframe, str) and timeframe.strip():
+        return timeframe.strip()
+    from tradingagents.dataflows.config import get_config
+
+    return str(get_config().get("timeframe", "Medium-term (1-3 Months)"))
+
+
+def is_futures_mode(state: Mapping[str, Any]) -> bool:
+    """Return True when the user selected a Futures (long/short) trading mode."""
+    return "futures" in get_trading_mode_from_state(state).lower()
+
+
+def get_trading_preferences_prompt(state: Mapping[str, Any]) -> str:
+    """Return mandatory trading-mode/timeframe instructions for analyst prompts."""
+    trading_mode = get_trading_mode_from_state(state)
+    timeframe = get_timeframe_from_state(state)
+    mode_label = "Futures Trading" if is_futures_mode(state) else "Spot Trading"
+    lines = [
+        "",
+        "USER TRADING PREFERENCES (mandatory — reflect exactly in the report header and analysis):",
+        f"- Timeframe: {timeframe}",
+        f"- Mode: {mode_label} (user selected: {trading_mode})",
+        f"Tailor indicator selection, holding horizon, and trade ideas to the {timeframe} horizon.",
+    ]
+    if is_futures_mode(state):
+        lines.append(
+            "Futures mode: you may recommend SHORT positions when bearish. "
+            "Discuss leverage-appropriate entries, stop-loss, and take-profit levels "
+            "for both LONG and SHORT scenarios. Do not describe this run as Spot, "
+            "do not use a long-only spot-investor frame, and do not write Spot in "
+            "the report header."
+        )
+    else:
+        lines.append(
+            "Spot mode (long only): do not recommend short selling; use BUY, HOLD, "
+            "or SELL (exit long) only."
+        )
+    return "\n".join(lines)
+
+
+def get_futures_risk_debate_prompt(state: Mapping[str, Any], role: str) -> str:
+    """Return Futures-specific risk-debate instructions for risk analysts."""
+    if not is_futures_mode(state):
+        return ""
+
+    timeframe = get_timeframe_from_state(state)
+    base = [
+        "",
+        "FUTURES RISK REVIEW (mandatory):",
+        f"- Treat the Trader output as a draft for the {timeframe} horizon; the Portfolio Manager will make the final execution plan.",
+        "- Evaluate whether LONG, SHORT, or HOLD is justified after considering liquidation risk, leverage, funding/borrow cost if available, open-interest or squeeze risk if mentioned, and ATR/volatility-adjusted stops.",
+        "- Explicitly challenge entries that chase price, stops that sit inside normal volatility, and take-profit levels that do not offer a reasonable risk/reward.",
+        "- If key futures data such as funding, open interest, or liquidation clusters is unavailable, state that limitation and reason from the available market/news/sentiment evidence instead of inventing numbers.",
+    ]
+    role_lower = role.lower()
+    if "aggressive" in role_lower:
+        base.append(
+            "- As the aggressive analyst, argue for taking the best asymmetric futures opportunity, but do not ignore liquidation or squeeze risk."
+        )
+    elif "conservative" in role_lower:
+        base.append(
+            "- As the conservative analyst, focus on capital preservation: smaller sizing, lower leverage, wider volatility-aware invalidation, or HOLD if the setup is not clean."
+        )
+    elif "neutral" in role_lower:
+        base.append(
+            "- As the neutral analyst, reconcile both sides into a balanced futures plan: direction, confidence, risk/reward, and the key condition that would invalidate the trade."
+        )
+    return "\n".join(base)
+
+
 def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     """Return the instrument context for the current run.
 
@@ -172,13 +272,16 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
             state.get("asset_type", "stock"),
         )
     
-    trading_mode = state.get("trading_mode", "Spot")
-    timeframe = state.get("timeframe", "Medium-term")
+    trading_mode = get_trading_mode_from_state(state)
+    timeframe = get_timeframe_from_state(state)
     context += (
         f" The user has selected the {timeframe} timeframe and {trading_mode} trading mode. "
-        f"Your analysis must align with this timeframe. If Futures mode is selected, "
-        f"you may recommend Short Selling if the outlook is bearish."
+        f"Your analysis must align with this timeframe."
     )
+    if is_futures_mode(state):
+        context += " Futures mode is active: you may recommend SHORT when bearish."
+    else:
+        context += " Spot mode is active: long-only; do not recommend short selling."
     return context
 
 

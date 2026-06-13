@@ -531,30 +531,38 @@ def get_user_selections():
     analysis_date = get_analysis_date()
 
     # Step 2.1: Trading Mode
-    console.print(
-        create_question_box(
-            "Step 2.1: Trading Mode",
-            "Select trading mode (Spot for Long Only, Futures for Long/Short)"
+    if os.environ.get("TRADINGAGENTS_TRADING_MODE"):
+        trading_mode = DEFAULT_CONFIG["trading_mode"]
+        console.print(f"[green]✓ Trading mode from environment:[/green] {trading_mode}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 2.1: Trading Mode",
+                "Select trading mode (Spot for Long Only, Futures for Long/Short)"
+            )
         )
-    )
-    trading_mode = questionary.select(
-        "Select Trading Mode:",
-        choices=["Spot (Long Only)", "Futures (Long/Short)"],
-        default="Spot (Long Only)"
-    ).ask()
+        trading_mode = questionary.select(
+            "Select Trading Mode:",
+            choices=["Spot (Long Only)", "Futures (Long/Short)"],
+            default="Spot (Long Only)"
+        ).ask()
 
     # Step 2.2: Timeframe
-    console.print(
-        create_question_box(
-            "Step 2.2: Timeframe",
-            "Select analysis and trading timeframe"
+    if os.environ.get("TRADINGAGENTS_TIMEFRAME"):
+        timeframe = DEFAULT_CONFIG["timeframe"]
+        console.print(f"[green]✓ Timeframe from environment:[/green] {timeframe}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 2.2: Timeframe",
+                "Select analysis and trading timeframe"
+            )
         )
-    )
-    timeframe = questionary.select(
-        "Select Timeframe:",
-        choices=["Intraday", "Short-term (1-2 Weeks)", "Medium-term (1-3 Months)", "Long-term (1+ Years)"],
-        default="Medium-term (1-3 Months)"
-    ).ask()
+        timeframe = questionary.select(
+            "Select Timeframe:",
+            choices=["Intraday", "Short-term (1-2 Weeks)", "Medium-term (1-3 Months)", "Long-term (1+ Years)"],
+            default="Medium-term (1-3 Months)"
+        ).ask()
 
     # Step 3: Output language (skipped when set via TRADINGAGENTS_OUTPUT_LANGUAGE)
     if os.environ.get("TRADINGAGENTS_OUTPUT_LANGUAGE"):
@@ -591,16 +599,20 @@ def get_user_selections():
     selected_research_depth = select_research_depth()
 
     # Step 5.1: Report Length
-    console.print(
-        create_question_box(
-            "Step 5.1: Report Length", "Select the desired length of the final report"
+    if os.environ.get("TRADINGAGENTS_REPORT_LENGTH"):
+        report_length = DEFAULT_CONFIG["report_length"]
+        console.print(f"[green]✓ Report length from environment:[/green] {report_length}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 5.1: Report Length", "Select the desired length of the final report"
+            )
         )
-    )
-    report_length = questionary.select(
-        "Select Report Length:",
-        choices=["Full (Detailed analysis)", "Concise (Brief summary)"],
-        default="Full (Detailed analysis)"
-    ).ask()
+        report_length = questionary.select(
+            "Select Report Length:",
+            choices=["Full (Detailed analysis)", "Concise (Brief summary)"],
+            default="Full (Detailed analysis)"
+        ).ask()
 
     # Step 6: LLM Provider (skipped when set via TRADINGAGENTS_LLM_PROVIDER).
     # The backend URL comes from TRADINGAGENTS_LLM_BACKEND_URL when set,
@@ -1047,6 +1059,8 @@ def run_analysis(checkpoint: bool = False):
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     config["report_length"] = selections.get("report_length", "Full (Detailed analysis)")
+    config["trading_mode"] = selections.get("trading_mode", DEFAULT_CONFIG["trading_mode"])
+    config["timeframe"] = selections.get("timeframe", DEFAULT_CONFIG["timeframe"])
     config["checkpoint_enabled"] = checkpoint
 
     # Create stats callback handler for tracking LLM/tool calls
@@ -1156,17 +1170,12 @@ def run_analysis(checkpoint: bool = False):
         update_display(layout, spinner_text, stats_handler=stats_handler, start_time=start_time)
 
         # Initialize state and get graph args with callbacks.
-        # Resolve the instrument identity once here so all agents anchor to
-        # the real company (#814); the CLI builds state directly rather than
-        # going through propagate(), so this must happen on the CLI path too.
-        instrument_context = graph.resolve_instrument_context(
-            selections["ticker"], selections["asset_type"]
-        )
-        init_agent_state = graph.propagator.create_initial_state(
+        # Use the same helper as propagate() so trading_mode/timeframe and
+        # past_context always reach every agent on the CLI path.
+        init_agent_state = graph.build_initial_agent_state(
             selections["ticker"],
             selections["analysis_date"],
             asset_type=selections["asset_type"],
-            instrument_context=instrument_context,
         )
         # Pass callbacks to graph config for tool execution tracking
         # (LLM tracking is handled separately via LLM constructor)
@@ -1288,7 +1297,6 @@ def run_analysis(checkpoint: bool = False):
         final_state = {}
         for chunk in trace:
             final_state.update(chunk)
-            
         if "final_trade_decision" not in final_state:
             final_state["final_trade_decision"] = "### Analysis Interrupted\nThe analysis was interrupted due to an error before a final decision could be reached."
             

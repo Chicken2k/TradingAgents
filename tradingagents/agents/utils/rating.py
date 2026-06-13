@@ -25,6 +25,15 @@ _RATING_SET = {r.lower() for r in RATINGS_5_TIER}
 # Matches "Rating: X" / "rating - X" / "Rating: **X**" — tolerates markdown
 # bold wrappers and either a colon or hyphen separator.
 _RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
+_FUTURES_FINAL_RE = re.compile(
+    r"FINAL TRANSACTION PROPOSAL:\s*\*{0,2}(LONG|SHORT|HOLD)\*{0,2}",
+    re.IGNORECASE,
+)
+_FUTURES_ACTION_TO_RATING = {
+    "LONG": "Buy",
+    "SHORT": "Sell",
+    "HOLD": "Hold",
+}
 
 
 def parse_rating(text: str, default: str = "Hold") -> str:
@@ -40,6 +49,10 @@ def parse_rating(text: str, default: str = "Hold") -> str:
         m = _RATING_LABEL_RE.search(line)
         if m and m.group(1).lower() in _RATING_SET:
             return m.group(1).capitalize()
+
+    futures_match = _FUTURES_FINAL_RE.search(text)
+    if futures_match:
+        return _FUTURES_ACTION_TO_RATING[futures_match.group(1).upper()]
 
     for line in text.splitlines():
         for word in line.lower().split():

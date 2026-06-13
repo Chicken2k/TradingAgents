@@ -9,12 +9,13 @@ from langchain_core.messages import AIMessage
 from tradingagents.agents.schemas import (
     TraderProposal,
     render_trader_proposal,
-    FuturesTraderProposal,
-    render_futures_proposal,
+    FuturesTraderBrief,
+    render_futures_trader_brief,
 )
 from tradingagents.agents.utils.agent_utils import (
     get_instrument_context_from_state,
     get_language_instruction,
+    is_futures_mode,
 )
 from tradingagents.agents.utils.structured import (
     bind_structured,
@@ -24,36 +25,21 @@ from tradingagents.agents.utils.structured import (
 
 def create_trader(llm):
     structured_llm_spot = bind_structured(llm, TraderProposal, "Trader")
-    structured_llm_futures = bind_structured(llm, FuturesTraderProposal, "Trader")
+    structured_llm_futures = bind_structured(llm, FuturesTraderBrief, "Trader")
 
     def trader_node(state, name):
         company_name = state["company_of_interest"]
         instrument_context = get_instrument_context_from_state(state)
         investment_plan = state["investment_plan"]
-        trading_mode = state.get("trading_mode", "Spot")
-        is_futures = "futures" in trading_mode.lower()
-
-        if is_futures:
-            # Load past strategy history
-            past_context = state.get("past_context", "")
-            past_section = ""
-            if past_context:
-                past_section = (
-                    f"\n\nBelow is the past decision/strategy history for {company_name}. "
-                    "If a previous futures execution strategy (e.g. '[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]' or similar) is present, "
-                    "review it and adapt/update those levels and decisions for the current context. Do not invent a completely "
-                    f"new strategy from scratch if you can build upon the prior one:\n{past_context}"
-                )
-
+        if is_futures_mode(state):
             messages = [
                 {
                     "role": "system",
                     "content": (
-                        "You are a futures trading agent analyzing market data to make leverage investment decisions. "
-                        "Based on your analysis, provide a specific recommendation to LONG, SHORT, or HOLD. "
-                        "Anchor your reasoning in the analysts' reports, the research plan, and past decisions/strategies. "
-                        "You MUST explicitly fill in the market entry price, safest limit entry price, breakout stop-market entry price, "
-                        "DCA range and split, chốt lời (TP1, TP2, TP3 Trailing), and stop-loss targets (allowing multiple options if appropriate)."
+                        "You are a futures trading agent preparing a preliminary direction for the risk team. "
+                        "Recommend LONG, SHORT, or HOLD with concise market context and reasoning. "
+                        "Do NOT specify final entry, take-profit, or stop-loss levels — the Portfolio Manager "
+                        "will issue the full execution strategy after the risk debate."
                         + get_language_instruction()
                     ),
                 },
@@ -63,11 +49,10 @@ def create_trader(llm):
                         f"Based on a comprehensive analysis by a team of analysts, here is an investment "
                         f"plan tailored for {company_name}. {instrument_context} This plan incorporates "
                         f"insights from current technical market trends, macroeconomic indicators, and "
-                        f"social media sentiment. Use this plan as a foundation for evaluating your next "
-                        f"trading decision.\n\nProposed Investment Plan: {investment_plan}"
-                        f"{past_section}\n\n"
-                        f"Leverage these insights to make an informed and strategic futures decision, explicitly "
-                        f"including directions, market context, entry strategies, take profit levels, and hard/soft stop-loss."
+                        f"social media sentiment. Use this plan as a foundation for your preliminary "
+                        f"futures direction.\n\nProposed Investment Plan: {investment_plan}\n\n"
+                        f"Provide a draft futures direction (LONG/SHORT/HOLD), market context, and reasoning "
+                        f"for the risk team to debate."
                     ),
                 },
             ]
@@ -75,7 +60,7 @@ def create_trader(llm):
                 structured_llm_futures,
                 llm,
                 messages,
-                render_futures_proposal,
+                render_futures_trader_brief,
                 "Trader",
             )
         else:

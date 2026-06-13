@@ -61,6 +61,14 @@ class TestParseRating:
         for r in RATINGS_5_TIER:
             assert parse_rating(f"Rating: {r}") == r
 
+    def test_futures_final_proposal_maps_to_rating(self):
+        text = (
+            "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]\n"
+            "1. HƯỚNG GIAO DỊCH: SHORT\n"
+            "FINAL TRANSACTION PROPOSAL: **SHORT**"
+        )
+        assert parse_rating(text) == "Sell"
+
 
 # ---------------------------------------------------------------------------
 # SignalProcessor: thin adapter over the heuristic

@@ -20,6 +20,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     "TRADINGAGENTS_TRADING_MODE":         "trading_mode",
     "TRADINGAGENTS_TIMEFRAME":            "timeframe",
+    "TRADINGAGENTS_REPORT_LENGTH":        "report_length",
 }
 
 

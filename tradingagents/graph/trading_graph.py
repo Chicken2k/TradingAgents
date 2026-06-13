@@ -354,13 +354,16 @@ class TradingAgentsGraph:
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock"):
-        """Execute the graph and write the resulting state to disk and memory log."""
-        # Initialize state — inject memory log context for PM and the
-        # deterministically resolved instrument identity for all agents.
+    def build_initial_agent_state(
+        self,
+        company_name: str,
+        trade_date: str,
+        asset_type: str = "stock",
+    ) -> Dict[str, Any]:
+        """Build the graph's initial state for a run (shared by CLI and propagate)."""
         past_context = self.memory_log.get_past_context(company_name)
         instrument_context = self.resolve_instrument_context(company_name, asset_type)
-        init_agent_state = self.propagator.create_initial_state(
+        return self.propagator.create_initial_state(
             company_name,
             trade_date,
             asset_type=asset_type,
@@ -368,6 +371,12 @@ class TradingAgentsGraph:
             instrument_context=instrument_context,
             trading_mode=self.config.get("trading_mode", "Spot"),
             timeframe=self.config.get("timeframe", "Medium-term"),
+        )
+
+    def _run_graph(self, company_name, trade_date, asset_type: str = "stock"):
+        """Execute the graph and write the resulting state to disk and memory log."""
+        init_agent_state = self.build_initial_agent_state(
+            company_name, trade_date, asset_type=asset_type
         )
         args = self.propagator.get_graph_args()
 

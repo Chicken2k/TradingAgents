@@ -19,9 +19,10 @@ so that:
 from __future__ import annotations
 
 from enum import Enum
+import re
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -184,9 +185,67 @@ class FuturesAction(str, Enum):
     HOLD = "HOLD"
 
 
-class FuturesTraderProposal(BaseModel):
-    """Structured transaction proposal for Futures trading produced by the Trader."""
+class FuturesTraderBrief(BaseModel):
+    """Preliminary futures direction from the Trader for risk-team debate."""
 
+    action: FuturesAction = Field(
+        description="The proposed futures direction before risk review. LONG / SHORT / HOLD.",
+    )
+    market_context: str = Field(
+        description="A 1-2 sentence summary of current market momentum in the requested language.",
+    )
+    reasoning: str = Field(
+        description="Why this direction is warranted, anchored in analyst reports and the research plan.",
+    )
+
+
+def render_futures_trader_brief(brief: FuturesTraderBrief) -> str:
+    """Render the Trader's preliminary futures proposal (Section III)."""
+    from tradingagents.dataflows.config import get_config
+
+    config = get_config()
+    lang = config.get("output_language", "English")
+    timeframe = config.get("timeframe", "Medium-term (1-3 Months)")
+    is_vi = "vietnamese" in lang.lower() or "tiếng việt" in lang.lower()
+
+    if is_vi:
+        parts = [
+            "**Đề xuất Futures (bản nháp — chờ Risk Team tranh luận)**",
+            "",
+            f"Select Timeframe: {timeframe}",
+            "",
+            f"**Hướng đề xuất**: {brief.action.value}",
+            f"**Bối cảnh thị trường**: {brief.market_context}",
+            f"**Lý do**: {brief.reasoning}",
+            "",
+            "_Chiến lược thực thi lệnh cuối cùng sẽ do Portfolio Manager quyết định sau khi Risk Team hoàn tất tranh luận._",
+            "",
+            f"FINAL TRANSACTION PROPOSAL: **{brief.action.value}**",
+        ]
+    else:
+        parts = [
+            "**Futures Proposal (draft — pending risk-team debate)**",
+            "",
+            f"Select Timeframe: {timeframe}",
+            "",
+            f"**Proposed Direction**: {brief.action.value}",
+            f"**Market Context**: {brief.market_context}",
+            f"**Reasoning**: {brief.reasoning}",
+            "",
+            "_Final order execution strategy will be issued by the Portfolio Manager after the risk debate._",
+            "",
+            f"FINAL TRANSACTION PROPOSAL: **{brief.action.value}**",
+        ]
+    return "\n".join(parts)
+
+
+class FuturesTraderProposal(BaseModel):
+    """Final futures execution strategy produced by the Portfolio Manager."""
+
+    timeframe: str = Field(
+        default="",
+        description="Exact user-selected trading timeframe, e.g. 'Short-term (1-2 Weeks)'.",
+    )
     action: FuturesAction = Field(
         description="The futures transaction direction. Exactly one of LONG / SHORT / HOLD.",
     )
@@ -217,6 +276,63 @@ class FuturesTraderProposal(BaseModel):
     hard_sl: str = Field(
         description="Mandatory stop loss target(s) (Stop-Market / other stop loss options). You may specify a hard stop loss price and optionally other stop loss options (e.g., alert/soft stop loss) if appropriate. E.g., '63000' or 'Hard SL 63000, Soft SL 63800'. Do not include the chống cháy tài khoản text.",
     )
+    confidence: str = Field(
+        default="Medium",
+        description="Conviction level for this setup. Use exactly High, Medium, or Low.",
+    )
+    risk_reward: str = Field(
+        default="N/A",
+        description="Estimated risk/reward for the main plan, e.g. '1:2.1 using entry_limit, hard_sl, and TP1/TP2'.",
+    )
+    leverage: str = Field(
+        default="N/A",
+        description="Recommended conservative leverage range and maximum leverage, e.g. '1x-3x, max 5x'.",
+    )
+    position_sizing: str = Field(
+        default="N/A",
+        description="Recommended position sizing or capital allocation for this futures idea.",
+    )
+    invalidation: str = Field(
+        default="N/A",
+        description="Clear invalidation condition that cancels the setup before or after entry.",
+    )
+
+    @staticmethod
+    def _first_number(value: str) -> Optional[float]:
+        match = re.search(r"-?\d+(?:,\d{3})*(?:\.\d+)?", str(value))
+        if not match:
+            return None
+        return float(match.group(0).replace(",", ""))
+
+    @model_validator(mode="after")
+    def validate_directional_levels(self):
+        """Catch obvious LONG/SHORT price inversions before rendering."""
+        if self.action == FuturesAction.HOLD:
+            return self
+
+        entry = self._first_number(self.entry_market) or self._first_number(self.entry_limit)
+        hard_sl = self._first_number(self.hard_sl)
+        tp1 = self._first_number(self.tp1)
+        tp2 = self._first_number(self.tp2)
+        if entry is None:
+            return self
+
+        if self.action == FuturesAction.LONG:
+            if hard_sl is not None and hard_sl >= entry:
+                raise ValueError("LONG hard_sl must be below the entry price")
+            if tp1 is not None and tp1 <= entry:
+                raise ValueError("LONG tp1 must be above the entry price")
+            if tp2 is not None and tp2 <= entry:
+                raise ValueError("LONG tp2 must be above the entry price")
+        elif self.action == FuturesAction.SHORT:
+            if hard_sl is not None and hard_sl <= entry:
+                raise ValueError("SHORT hard_sl must be above the entry price")
+            if tp1 is not None and tp1 >= entry:
+                raise ValueError("SHORT tp1 must be below the entry price")
+            if tp2 is not None and tp2 >= entry:
+                raise ValueError("SHORT tp2 must be below the entry price")
+
+        return self
 
 
 def render_futures_proposal(proposal: FuturesTraderProposal) -> str:
@@ -224,6 +340,7 @@ def render_futures_proposal(proposal: FuturesTraderProposal) -> str:
     from tradingagents.dataflows.config import get_config
     config = get_config()
     lang = config.get("output_language", "English")
+    timeframe = proposal.timeframe or config.get("timeframe", "Medium-term (1-3 Months)")
 
     is_vi = "vietnamese" in lang.lower() or "tiếng việt" in lang.lower()
 
@@ -231,18 +348,24 @@ def render_futures_proposal(proposal: FuturesTraderProposal) -> str:
         parts = [
             "[CHIẾN LƯỢC THỰC THI LỆNH FUTURES]",
             "",
+            f"Select Timeframe: {timeframe}",
+            "",
             f"1. HƯỚNG GIAO DỊCH: {proposal.action.value}",
             f"2. BỐI CẢNH THỊ TRƯỜNG: {proposal.market_context}",
-            "3. CÁC LOẠI LỆNH VÀ ĐIỂM VÀO ĐỀ XUẤT:",
+            f"3. ĐỘ TIN CẬY: {proposal.confidence}",
+            f"4. TỶ LỆ RỦI RO/LỢI NHUẬN ƯỚC TÍNH: {proposal.risk_reward}",
+            f"5. ĐÒN BẨY & KHỐI LƯỢNG ĐỀ XUẤT: {proposal.leverage}; {proposal.position_sizing}",
+            f"6. ĐIỀU KIỆN VÔ HIỆU KỊCH BẢN: {proposal.invalidation}",
+            "7. CÁC LOẠI LỆNH VÀ ĐIỂM VÀO ĐỀ XUẤT:",
             f"   - Lựa chọn 1 - Vào lệnh ngay lập tức (Lệnh Market / Thị trường): {proposal.entry_market}. Chỉ dùng lệnh này nếu đà giá đang cực kỳ mạnh và việc chờ đợi sẽ làm lỡ mất cơ hội.",
             f"   - Lựa chọn 2 - Lệnh An toàn nhất (Lệnh Limit / Chờ giới hạn): {proposal.entry_limit}. Dùng lệnh này để bắt râu nến/đợi giá hồi về điểm đẹp.",
             f"   - Lựa chọn 3 - Lệnh Đánh Breakout (Lệnh Stop-Market / Dừng thị trường): {proposal.entry_stop}. Cài lệnh này nếu giá phá vỡ hỗ trợ/kháng cự quan trọng.",
             f"   - Lựa chọn 4 - Vùng Gom Lệnh DCA (Dải Lệnh Limit): {proposal.entry_dca}.",
-            "4. CHIẾN LƯỢC CHỐT LỜI (CÁC LOẠI LỆNH EXIT):",
+            "8. CHIẾN LƯỢC CHỐT LỜI (CÁC LOẠI LỆNH EXIT):",
             f"   - TP1 (Lệnh Limit): {proposal.tp1} - Khuyên chốt 50% vị thế.",
             f"   - TP2 (Lệnh Limit): {proposal.tp2} - Khuyên chốt 30% vị thế.",
             f"   - TP3 (Lệnh Trailing Stop / Dừng theo dõi): {proposal.tp3} - Gợi ý mức để thả trôi 20% vị thế còn lại gồng lời.",
-            "5. CẮT LỖ BẮT BUỘC (STOP LOSS):",
+            "9. CẮT LỖ BẮT BUỘC (STOP LOSS):",
             f"   - Lệnh Hard SL (Stop-Market): {proposal.hard_sl} - Lệnh kích hoạt thị trường bắt buộc để chống cháy tài khoản.",
         ]
     else:
@@ -250,18 +373,24 @@ def render_futures_proposal(proposal: FuturesTraderProposal) -> str:
         parts = [
             "[FUTURES ORDER EXECUTION STRATEGY]",
             "",
+            f"Select Timeframe: {timeframe}",
+            "",
             f"1. TRANSACTION DIRECTION: {proposal.action.value}",
             f"2. MARKET CONTEXT: {proposal.market_context}",
-            "3. ORDER TYPES AND PROPOSED ENTRY POINTS:",
+            f"3. CONFIDENCE: {proposal.confidence}",
+            f"4. ESTIMATED RISK/REWARD: {proposal.risk_reward}",
+            f"5. LEVERAGE & POSITION SIZING: {proposal.leverage}; {proposal.position_sizing}",
+            f"6. INVALIDATION CONDITION: {proposal.invalidation}",
+            "7. ORDER TYPES AND PROPOSED ENTRY POINTS:",
             f"   - Option 1 - Immediate Entry (Market Order): {proposal.entry_market}. Only use this order if momentum is extremely strong and waiting will result in a missed opportunity.",
             f"   - Option 2 - Safest Entry (Limit Order): {proposal.entry_limit}. Use this order to catch price wicks or wait for price to pull back to a favorable point.",
             f"   - Option 3 - Breakout Entry (Stop-Market Order): {proposal.entry_stop}. Set this order if price breaks through key support/resistance.",
             f"   - Option 4 - DCA Accumulation Zone (Limit Order Range): {proposal.entry_dca}.",
-            "4. TAKE PROFIT STRATEGY (EXIT ORDER TYPES):",
+            "8. TAKE PROFIT STRATEGY (EXIT ORDER TYPES):",
             f"   - TP1 (Limit Order): {proposal.tp1} - Recommend closing 50% of the position.",
             f"   - TP2 (Limit Order): {proposal.tp2} - Recommend closing 30% of the position.",
             f"   - TP3 (Trailing Stop / Follow-up Stop): {proposal.tp3} - Suggest level to let the remaining 20% of the position run to maximize profit.",
-            "5. MANDATORY STOP LOSS:",
+            "9. MANDATORY STOP LOSS:",
             f"   - Hard SL Order (Stop-Market): {proposal.hard_sl} - Mandatory market trigger to prevent liquidation.",
         ]
 

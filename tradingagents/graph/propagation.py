@@ -1,11 +1,15 @@
 # TradingAgents/graph/propagation.py
 
 from typing import Dict, Any, List, Optional
+
+from langchain_core.messages import HumanMessage
+
 from tradingagents.agents.utils.agent_states import (
     AgentState,
     InvestDebateState,
     RiskDebateState,
 )
+from tradingagents.agents.utils.agent_utils import build_initial_user_message
 
 
 class Propagator:
@@ -34,7 +38,13 @@ class Propagator:
         ``get_instrument_context_from_state``.
         """
         return {
-            "messages": [("human", company_name)],
+            "messages": [
+                HumanMessage(
+                    content=build_initial_user_message(
+                        company_name, str(trade_date), trading_mode, timeframe
+                    )
+                )
+            ],
             "company_of_interest": company_name,
             "asset_type": asset_type,
             "instrument_context": instrument_context,

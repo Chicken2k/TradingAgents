@@ -41,6 +41,9 @@ class TestCliSkipsPromptsFromEnv(unittest.TestCase):
             "TRADINGAGENTS_QUICK_THINK_LLM": "deepseek-v4-pro",
             "TRADINGAGENTS_LLM_BACKEND_URL": "https://opencode.ai/zen/go/v1",
             "TRADINGAGENTS_OUTPUT_LANGUAGE": "Japanese",
+            "TRADINGAGENTS_TRADING_MODE": "Futures (Long/Short)",
+            "TRADINGAGENTS_TIMEFRAME": "Short-term (1-2 Weeks)",
+            "TRADINGAGENTS_REPORT_LENGTH": "Concise (Brief summary)",
         }
         fake_cfg = dict(m.DEFAULT_CONFIG)
         fake_cfg.update({
@@ -49,6 +52,9 @@ class TestCliSkipsPromptsFromEnv(unittest.TestCase):
             "quick_think_llm": "deepseek-v4-pro",
             "deep_think_llm": "kimi-k2.5",
             "output_language": "Japanese",
+            "trading_mode": "Futures (Long/Short)",
+            "timeframe": "Short-term (1-2 Weeks)",
+            "report_length": "Concise (Brief summary)",
         })
 
         with mock.patch.dict(os.environ, env, clear=False), \
@@ -80,6 +86,9 @@ class TestCliSkipsPromptsFromEnv(unittest.TestCase):
         self.assertEqual(sel["shallow_thinker"], "deepseek-v4-pro")
         self.assertEqual(sel["deep_thinker"], "kimi-k2.5")
         self.assertEqual(sel["output_language"], "Japanese")
+        self.assertEqual(sel["trading_mode"], "Futures (Long/Short)")
+        self.assertEqual(sel["timeframe"], "Short-term (1-2 Weeks)")
+        self.assertEqual(sel["report_length"], "Concise (Brief summary)")
 
 
 if __name__ == "__main__":
