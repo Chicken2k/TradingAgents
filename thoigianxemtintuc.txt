@@ -51,3 +51,13 @@ Deep-Thinking: DeepSeek V3.2 (thinking)
 ===========
 
 .\venv\Scripts\tradingagents
+
+
+=======
+
+Setup gợi ý cho Futures BTC:
+
+Mode: Futures (Long/Short)
+Timeframe: Short-term (1-2 Weeks)
+Analysts: Market + News (tối thiểu)
+Research depth: Standard trở lên nếu muốn Risk debate đầy đủ
