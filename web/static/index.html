@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingAgents Web UI</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Configuration -->
+        <aside class="sidebar glass-panel">
+            <div class="sidebar-header">
+                <h2>TradingAgents</h2>
+                <p>AI Financial Trading Framework</p>
+            </div>
+            
+            <form id="config-form" class="config-form">
+                <div class="form-group">
+                    <label for="ticker_select">Ticker Symbol</label>
+                    <select id="ticker_select" name="ticker_select" required>
+                        <option value="BTC-USD">BTC-USD (Bitcoin)</option>
+                        <option value="ETH-USD">ETH-USD (Ethereum)</option>
+                        <option value="BNB-USD">BNB-USD (Binance Coin)</option>
+                        <option value="SOL-USD">SOL-USD (Solana)</option>
+                        <option value="XRP-USD">XRP-USD (XRP)</option>
+                        <option value="SPY">SPY (S&P 500 ETF)</option>
+                        <option value="AAPL">AAPL (Apple)</option>
+                        <option value="NVDA">NVDA (Nvidia)</option>
+                        <option value="MSFT">MSFT (Microsoft)</option>
+                        <option value="custom">Other (Custom Ticker)...</option>
+                    </select>
+                    <input type="text" id="ticker_custom" name="ticker_custom" class="hidden" placeholder="Type custom ticker (e.g. 0700.HK)" style="margin-top: 8px;">
+                </div>
+
+                <div class="form-group">
+                    <label for="analysis_date">Analysis Date</label>
+                    <input type="date" id="analysis_date" name="analysis_date" required>
+                </div>
+                
+
+
+                <div class="form-group">
+                    <label for="trading_mode">Trading Mode</label>
+                    <select id="trading_mode" name="trading_mode" required>
+                        <option value="Spot (Long Only)">Spot (Long Only)</option>
+                        <option value="Futures (Long/Short)" selected>Futures (Long/Short)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="timeframe">Timeframe</label>
+                    <select id="timeframe" name="timeframe" required>
+                        <option value="Intraday">Intraday</option>
+                        <option value="Short-term (1-2 Weeks)" selected>Short-term (1-2 Weeks)</option>
+                        <option value="Medium-term (1-3 Months)">Medium-term (1-3 Months)</option>
+                        <option value="Long-term (1+ Years)">Long-term (1+ Years)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="output_language_select">Output Language</label>
+                    <select id="output_language_select" name="output_language_select" required>
+                        <option value="English">English (default)</option>
+                        <option value="Vietnamese" selected>Vietnamese (Tiếng Việt)</option>
+                        <option value="Chinese">Chinese (中文)</option>
+                        <option value="Japanese">Japanese (日本語)</option>
+                        <option value="Korean">Korean (한국어)</option>
+                        <option value="Hindi">Hindi (हिन्दी)</option>
+                        <option value="Spanish">Spanish (Español)</option>
+                        <option value="Portuguese">Portuguese (Português)</option>
+                        <option value="French">French (Français)</option>
+                        <option value="German">German (Deutsch)</option>
+                        <option value="Arabic">Arabic (العربية)</option>
+                        <option value="Russian">Russian (Русский)</option>
+                        <option value="custom">Other (Custom language)...</option>
+                    </select>
+                    <input type="text" id="output_language_custom" name="output_language_custom" class="hidden" placeholder="Type language (e.g. Thai)" style="margin-top: 8px;">
+                </div>
+
+                <div class="form-group">
+                    <label>Analysts Team</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" name="analysts" value="market" checked> Market</label>
+                        <label><input type="checkbox" name="analysts" value="social"> Social/Sentiment</label>
+                        <label><input type="checkbox" name="analysts" value="news" checked> News</label>
+                        <label id="fundamentals-container"><input type="checkbox" id="analyst_fundamentals" name="analysts" value="fundamentals" checked> Fundamentals</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="llm_provider">LLM Provider</label>
+                    <select id="llm_provider" name="llm_provider" required>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                        <option value="google">Google (Gemini)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="research_depth">Research Depth</label>
+                    <select id="research_depth" name="research_depth" required>
+                        <option value="1">Shallow (Quick research, few debates)</option>
+                        <option value="2">Moderate (Standard research and debate)</option>
+                        <option value="3">Deep (Extensive research and debate)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="report_length">Report Length</label>
+                    <select id="report_length" name="report_length" required>
+                        <option value="Full (Detailed analysis)">Full (Detailed analysis)</option>
+                        <option value="Concise (Brief summary)">Concise (Brief summary)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="shallow_thinker">Quick Thinking Model</label>
+                    <select id="shallow_thinker" name="shallow_thinker" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="deep_thinker">Deep Thinking Model</label>
+                    <select id="deep_thinker" name="deep_thinker" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="api_key">API Key</label>
+                    <input type="password" id="api_key" name="api_key" placeholder="Enter API Key" required>
+                </div>
+
+                <button type="submit" id="run-btn" class="btn-primary">
+                    <span class="btn-text">Run Analysis</span>
+                    <span class="loader hidden"></span>
+                </button>
+            </form>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <div id="welcome-state" class="state-view active">
+                <div class="welcome-card glass-panel">
+                    <h1>Welcome to TradingAgents Web</h1>
+                    <p>Configure your analysis on the left and click "Run Analysis" to begin.</p>
+                    <div class="features-list">
+                        <div class="feature-item">
+                            <span class="icon">📈</span>
+                            <span>Multi-Agent Research</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="icon">🧠</span>
+                            <span>LLM-powered Decisions</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="icon">🛡️</span>
+                            <span>Risk Management</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading-state" class="state-view hidden">
+                <div class="loading-container">
+                    <div class="pulsing-brain">🧠</div>
+                    <h2>Agents are thinking...</h2>
+                    <p>This may take a few minutes depending on the selected models and research depth.</p>
+                    <div class="progress-bar-container" style="margin-top: 20px; width: 100%; max-width: 400px; margin-left: auto; margin-right: auto; background-color: #333; border-radius: 10px; height: 10px; overflow: hidden;">
+                        <div id="progress-bar" style="background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); height: 100%; width: 0%; transition: width 1s linear;"></div>
+                    </div>
+                    <p id="progress-text" style="text-align: center; font-size: 0.9em; margin-top: 10px; color: #aaa;">Estimated time remaining: calculating...</p>
+                </div>
+            </div>
+
+            <div id="result-state" class="state-view hidden">
+                <div class="result-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>Analysis Report: <span id="report-ticker" class="highlight"></span></h2>
+                        <div class="decision-badge" id="report-decision"></div>
+                    </div>
+                    <div class="result-actions">
+                        <button id="download-btn" class="btn-secondary" style="margin-right: 10px;">Download Report (.txt)</button>
+                        <button onclick="resetView()" class="btn-primary">New Analysis</button>
+                    </div>
+                </div>
+                <div id="report-content" class="markdown-body glass-panel">
+                    <!-- Markdown content will be injected here -->
+                </div>
+            </div>
+
+            <div id="error-state" class="state-view hidden">
+                <div class="error-card glass-panel">
+                    <h2>⚠️ Analysis Error</h2>
+                    <p id="error-message"></p>
+                    <pre id="error-traceback"></pre>
+                    <button class="btn-secondary" onclick="resetView()">Try Again</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
