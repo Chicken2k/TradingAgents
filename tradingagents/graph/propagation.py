@@ -5,7 +5,6 @@ from typing import Dict, Any, List, Optional
 from langchain_core.messages import HumanMessage
 
 from tradingagents.agents.utils.agent_states import (
-    AgentState,
     InvestDebateState,
     RiskDebateState,
 )
@@ -28,7 +27,7 @@ class Propagator:
         instrument_context: str = "",
         trading_mode: str = "Spot",
         timeframe: str = "Medium-term",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create the initial state for the agent graph.
 
         ``instrument_context`` is the deterministic ticker-identity string
@@ -82,7 +81,7 @@ class Propagator:
             "news_report": "",
         }
 
-    def get_graph_args(self, callbacks: Optional[List] = None) -> Dict[str, Any]:
+    def get_graph_args(self, callbacks: list | None = None) -> dict[str, Any]:
         """Get arguments for the graph invocation.
 
         Args:
